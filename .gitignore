@@ -1,0 +1,10 @@
+# Security
+.env
+
+# Virtual Environment
+.venv/
+__pycache__/
+
+# Large Data & Output Files
+*.csv
+*.xlsx
