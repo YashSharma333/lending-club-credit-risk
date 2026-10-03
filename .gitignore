@@ -1,10 +1,10 @@
-# Security
-.env
-
-# Virtual Environment
+# Environments
 .venv/
 __pycache__/
 
-# Large Data & Output Files
+# Credentials
+.env
+
+# Data and Outputs
 *.csv
 *.xlsx

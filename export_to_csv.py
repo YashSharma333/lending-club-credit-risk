@@ -3,11 +3,10 @@ from dotenv import load_dotenv
 import pandas as pd
 from sqlalchemy import create_engine
 
-
 # Load the hidden credentials
 load_dotenv()
 
-#Database Connection (Cached so it doesn't reconnect on every click)
+# Database Connection (Cached so it doesn't reconnect on every click)
 def init_connection():
     db_user = os.getenv("DB_USER")
     db_password = os.getenv("DB_PASSWORD")
@@ -18,72 +17,37 @@ def init_connection():
 # Connect to your database
 engine = init_connection()
 
-# Your existing SQL queries
-roi_query = """SELECT
-grade,
-COUNT(loan_id) AS total_closed_loans,
-ROUND(SUM(loan_amnt), 2) AS total_cap_dep,
-ROUND(SUM(total_pymnt) - SUM(loan_amnt), 2) as net_return,
-ROUND(((SUM(total_pymnt) - SUM(loan_amnt)) / SUM(loan_amnt)) * 100, 2) as roi_percentage
-FROM loan_portfolio
-WHERE loan_status IN ('Fully Paid', 'Charged Off')
-GROUP BY grade
-ORDER BY grade ASC;
-"""
-lgd_query = """
-SELECT
-grade,
-COUNT(loan_id) AS total_defaults,
-ROUND(AVG(loan_amnt), 2) AS avg_loan_amount,
-ROUND(AVG((loan_amnt - total_pymnt) / loan_amnt) * 100, 2) as avg_lgd_percentage,
-ROUND(AVG(recoveries / loan_amnt) * 100, 2) as recovery_rate_percentage
-FROM loan_portfolio
-WHERE loan_status = 'Charged Off'
-GROUP BY grade
-ORDER BY grade ASC;"""
+# 1. Open and read your master SQL file
+print("Reading SQL queries from risk_analysis.sql...")
+with open('risk_analysis.sql', 'r') as file:
+    sql_script = file.read()
 
-matrix_query = """SELECT
-CASE
-WHEN fico_range_low >= 750 THEN '1. Excellent (750+)'
-WHEN fico_range_low >= 700 THEN '2. Good (700-749)'
-WHEN fico_range_low >= 660 THEN '3. Fair (660-699)'
-ELSE '4. Poor (<660)'
-END AS fico_bracket,
-CASE
-WHEN dti < 15 THEN '1. Low (<15%%)'
-WHEN dti BETWEEN 15 AND 25 THEN '2. Moderate (15-25%%)'
-ELSE '3. High (>25%%)'
-END AS dti_bracket,
-COUNT(loan_id) AS total_loans,
-ROUND((SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) / COUNT(loan_id)) * 100, 2) AS default_rate
-FROM loan_portfolio
-WHERE loan_status IN ('Fully Paid', 'Charged Off')
-AND fico_range_low IS NOT NULL
-AND dti IS NOT NULL
-GROUP BY fico_bracket, dti_bracket
-ORDER BY fico_bracket ASC, dti_bracket ASC;"""
+# 2. Split the file into individual queries using the semicolon
+# The list comprehension ensures we ignore any blank spaces at the end of the file
+queries = [q.strip() for q in sql_script.split(';') if q.strip()]
 
-util_query = """SELECT
-CASE
-WHEN revol_util < 30 THEN '1. Low (<30%%)'
-WHEN revol_util BETWEEN 30 AND 60 THEN '2. Moderate (30-60%%)'
-WHEN revol_util BETWEEN 60 AND 90 THEN '3. High (60-90%%)'
-ELSE '4. Maxed Out (>90%%)'
-END AS utilization_bracket,
-COUNT(loan_id) AS total_loans,
-ROUND((SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) / COUNT(loan_id)) * 100, 2) AS default_rate
-FROM loan_portfolio
-WHERE loan_status IN ('Fully Paid', 'Charged Off')
-AND revol_util IS NOT NULL
-GROUP BY utilization_bracket
-ORDER BY utilization_bracket ASC;"""
+# SAFETY CHECK: Ensure Python found all 10 queries
+print(f"Found {len(queries)} queries.")
 
-# Write all queries to separate tabs in one Excel file
-print("Exporting data to Excel...")
-with pd.ExcelWriter('Credit_Risk_Portfolio.xlsx') as writer:
-    pd.read_sql(roi_query, engine).to_excel(writer, sheet_name='ROI_Data', index=False)
-    pd.read_sql(lgd_query, engine).to_excel(writer, sheet_name='LGD_Data', index=False)
-    pd.read_sql(matrix_query, engine).to_excel(writer, sheet_name='FICO_DTI_Data', index=False)
-    pd.read_sql(util_query, engine).to_excel(writer, sheet_name='Utilization_Data', index=False)
+if len(queries) < 10:
+    print("WARNING: Python did not find all 10 queries. Check your SQL file and ensure every query ends with a semicolon (;)")
+else:
+    # 3. Write to Excel using the dynamically loaded queries
+    print("Exporting complete 10-query dashboard data to Excel...")
+    
+    with pd.ExcelWriter('Credit_Risk_Master.xlsx') as writer:
+        # Original Thesis Data
+        pd.read_sql(queries[0], engine).to_excel(writer, sheet_name='Top_KPIs', index=False)
+        pd.read_sql(queries[1], engine).to_excel(writer, sheet_name='ROI_Data', index=False)
+        pd.read_sql(queries[2], engine).to_excel(writer, sheet_name='LGD_Data', index=False)
+        pd.read_sql(queries[3], engine).to_excel(writer, sheet_name='FICO_DTI_Data', index=False)
+        pd.read_sql(queries[4], engine).to_excel(writer, sheet_name='Utilization_Data', index=False)
+        
+        # New BI Dashboard Data
+        pd.read_sql(queries[5], engine).to_excel(writer, sheet_name='Term_Data', index=False)
+        pd.read_sql(queries[6], engine).to_excel(writer, sheet_name='Emp_Length_Data', index=False)
+        pd.read_sql(queries[7], engine).to_excel(writer, sheet_name='Purpose_Data', index=False)
+        pd.read_sql(queries[8], engine).to_excel(writer, sheet_name='Loan_Amount_Data', index=False)
+        pd.read_sql(queries[9], engine).to_excel(writer, sheet_name='State_Data', index=False)
 
-print("Export Complete! Check your folder for Credit_Risk_Portfolio.xlsx")
+    print("Export Complete! Check your folder for Credit_Risk_Master.xlsx")
