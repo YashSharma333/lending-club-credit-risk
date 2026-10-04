@@ -7,4 +7,4 @@ __pycache__/
 
 # Data and Outputs
 *.csv
-*.xlsx
+*.xlsx.DS_Store
