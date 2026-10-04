@@ -1,10 +1,10 @@
 -- ==========================================
--- 1. Top Ribbon KPIs (Total Borrowers, Volume, Risk, Default Rate)
+-- 1. Top Ribbon KPIs (Total Borrowers, Volume, Charged-Off Principal, Default Rate)
 -- ==========================================
 SELECT 
     COUNT(loan_id) AS total_borrowers,
     SUM(loan_amnt) AS total_loan_amount,
-    SUM(CASE WHEN loan_status IN ('Charged Off', 'Late (31-120 days)', 'In Grace Period') THEN loan_amnt ELSE 0 END) AS amount_at_risk,
+    SUM(CASE WHEN loan_status = 'Charged Off' THEN loan_amnt ELSE 0 END) AS amount_at_risk,
     ROUND((SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) / COUNT(loan_id)) * 100, 2) AS overall_default_rate
 FROM loan_portfolio
 WHERE loan_status IN ('Fully Paid', 'Charged Off');
@@ -48,9 +48,9 @@ SELECT
         ELSE '4. Poor (<660)'
     END AS fico_bracket,
     CASE 
-        WHEN dti < 15 THEN '1. Low (<15%%)'
-        WHEN dti BETWEEN 15 AND 25 THEN '2. Moderate (15-25%%)'
-        ELSE '3. High (>25%%)'
+        WHEN dti < 15 THEN '1. Low (<15%)'
+        WHEN dti BETWEEN 15 AND 25 THEN '2. Moderate (15-25%)'
+        ELSE '3. High (>25%)'
     END AS dti_bracket,
     COUNT(loan_id) AS total_loans,
     ROUND((SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) / COUNT(loan_id)) * 100, 2) AS default_rate
@@ -63,15 +63,17 @@ ORDER BY fico_bracket ASC, dti_bracket ASC;
 
 -- ==========================================
 -- 5. Credit Utilization as an Early Warning Indicator
+--    (chart default_rate as a COLUMN chart, total_defaults is for share-of-defaults views)
 -- ==========================================
 SELECT 
     CASE 
-        WHEN revol_util < 30 THEN '1. Low (<30%%)'
-        WHEN revol_util BETWEEN 30 AND 60 THEN '2. Moderate (30-60%%)'
-        WHEN revol_util BETWEEN 60 AND 90 THEN '3. High (60-90%%)'
-        ELSE '4. Maxed Out (>90%%)'
+        WHEN revol_util < 30 THEN '1. Low (<30%)'
+        WHEN revol_util BETWEEN 30 AND 60 THEN '2. Moderate (30-60%)'
+        WHEN revol_util BETWEEN 60 AND 90 THEN '3. High (60-90%)'
+        ELSE '4. Maxed Out (>90%)'
     END AS utilization_bracket,
     COUNT(loan_id) AS total_loans,
+    SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) AS total_defaults,
     ROUND((SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) / COUNT(loan_id)) * 100, 2) AS default_rate
 FROM loan_portfolio
 WHERE loan_status IN ('Fully Paid', 'Charged Off')
@@ -81,6 +83,7 @@ ORDER BY utilization_bracket ASC;
 
 -- ==========================================
 -- 6. Default Loans by Term Month (36 vs 60)
+--    (doughnut: total_defaults = share of all defaults by term)
 -- ==========================================
 SELECT 
     term,
@@ -93,7 +96,8 @@ GROUP BY term
 ORDER BY term;
 
 -- ==========================================
--- 7. Employment Length Risk (Replaces Employee Type)
+-- 7. Employment Length Risk
+--    (doughnut: total_defaults = share of all defaults by employment length)
 -- ==========================================
 SELECT 
     CASE 
@@ -104,6 +108,7 @@ SELECT
         ELSE '5. Unknown'
     END AS employment_duration,
     COUNT(loan_id) AS total_loans,
+    SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) AS total_defaults,
     ROUND((SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) / COUNT(loan_id)) * 100, 2) AS default_rate
 FROM loan_portfolio
 WHERE loan_status IN ('Fully Paid', 'Charged Off')
@@ -112,10 +117,12 @@ ORDER BY employment_duration;
 
 -- ==========================================
 -- 8. Loan Default Rate by Purpose
+--    (top 8 purposes by volume, chart default_rate as a sorted BAR chart)
 -- ==========================================
 SELECT 
     purpose,
     COUNT(loan_id) AS total_loans,
+    SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) AS total_defaults,
     ROUND((SUM(CASE WHEN loan_status = 'Charged Off' THEN 1 ELSE 0 END) / COUNT(loan_id)) * 100, 2) AS default_rate
 FROM loan_portfolio
 WHERE loan_status IN ('Fully Paid', 'Charged Off') AND purpose IS NOT NULL

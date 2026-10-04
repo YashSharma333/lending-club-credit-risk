@@ -1,11 +1,19 @@
-# Environments
-.venv/
-__pycache__/
-
-# Credentials
+# Secrets
 .env
 
-# Data and Outputs
+# Python / editors
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/
+.idea/
+.DS_Store
+
+# Data (too large for GitHub)
+data/
 *.csv
-*.xlsx
-**/.DS_Store
+
+# Generated output and Office temp files
+reports/Credit_Risk_Data.xlsx
+~$*
