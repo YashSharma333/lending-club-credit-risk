@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
+import re 
 
 # 1. Page Configuration (Wide layout for BI Dashboard)
 st.set_page_config(page_title="Credit Risk Dashboard", layout="wide")
@@ -31,19 +32,27 @@ def load_data():
     # Split by semicolon and remove empty strings
     queries = [q.strip() for q in sql_script.split(';') if q.strip()]
     
-    # Execute all 6 queries
     dfs = []
     for query in queries:
-        dfs.append(pd.read_sql(query, engine))
+        # Strip single-line (--) and multi-line (/* */) comments temporarily for the check
+        clean_query = re.sub(r'--.*', '', query).strip()
+        clean_query = re.sub(r'/\*.*?\*/', '', clean_query, flags=re.DOTALL).strip()
+        
+        # Check if the actual SQL code starts with SELECT or WITH
+        if clean_query.upper().startswith(("SELECT", "WITH")):
+            # Execute the original query against the database
+            dfs.append(pd.read_sql(query, engine))
+            
     return dfs
 
 # Load the dataframes
 try:
     data = load_data()
-    kpi_df, term_df, emp_df, purpose_df, amount_df, state_df = data
+    kpi_df, roi_df, lgd_df, fico_dti_df, utilization_df, term_df, emp_length_df, purpose_df, loan_amount_df, state_df = data
 except Exception as e:
     st.error(f"Error loading data. Check your SQL file. Details: {e}")
     st.stop()
+
 
 # ==========================================
 # DASHBOARD LAYOUT & VISUALS
@@ -73,7 +82,7 @@ with col_left:
 
 with col_mid:
     st.subheader("Risk by Employment Length")
-    st.bar_chart(data=emp_df.set_index('employment_duration')['default_rate'])
+    st.bar_chart(data=emp_length_df.set_index('employment_duration')['default_rate'])
 
 with col_right:
     st.subheader("Top Risk by Loan Purpose")
@@ -86,7 +95,7 @@ col_bottom_left, col_bottom_right = st.columns(2)
 
 with col_bottom_left:
     st.subheader("Amount at Risk by Loan Bracket")
-    st.bar_chart(data=amount_df.set_index('loan_amount_bin')['amount_at_risk'], color="#ff4b4b")
+    st.bar_chart(data=loan_amount_df.set_index('loan_amount_bin')['amount_at_risk'], color="#ff4b4b")
 
 with col_bottom_right:
     st.subheader("Top 10 Highest Risk States")
